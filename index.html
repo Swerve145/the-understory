@@ -395,7 +395,7 @@
                 filter.frequency.value = 180; // Very muffled
 
                 const noiseVolume = ctx.createGain();
-                noiseVolume.gain.value = 0.015; // Extremely quiet background presence
+                noiseVolume.gain.value = 0.005; // Extremely quiet background presence
 
                 noiseSource.connect(filter);
                 filter.connect(noiseVolume);
