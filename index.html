@@ -41,7 +41,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            user-select: none; /* Prevents text selection for a game feel */
+            user-select: none;
         }
 
         /* =========================================
@@ -69,7 +69,7 @@
             top: 0; left: 0; width: 100vw; height: 100vh;
             background: radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%);
             z-index: 0;
-            transition: background 3s ease; /* Slow transition for scene changes */
+            transition: background 3s ease;
         }
 
         /* =========================================
@@ -90,7 +90,6 @@
             transition: background 2s ease;
         }
 
-        /* Spores injected via JS will have dynamic animations */
         @keyframes float-up {
             0% { transform: translateY(110vh) translateX(0) rotate(0deg); opacity: 0; }
             10% { opacity: 0.5; }
@@ -193,13 +192,16 @@
 
         .story-paragraph {
             opacity: 0;
-            transform: translateY(10px);
-            transition: opacity 2s ease, transform 2s ease;
+            transition: opacity 1.5s ease;
         }
 
         .story-paragraph.visible {
             opacity: 1;
-            transform: translateY(0);
+        }
+
+        .story-paragraph.fade-out {
+            opacity: 0;
+            transition: opacity 0.8s ease;
         }
 
         em {
@@ -216,6 +218,34 @@
             border-left: 2px solid var(--ui-border);
         }
 
+        .typewriter-cursor {
+            display: inline-block;
+            width: 2px;
+            height: 1.2em;
+            background: var(--accent);
+            margin-left: 2px;
+            vertical-align: text-bottom;
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% { background: transparent; }
+        }
+
+        /* Final hidden message */
+        .final-message {
+            font-size: 1rem;
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            margin-top: 40px;
+            opacity: 0;
+            transition: opacity 2.5s ease;
+        }
+        .final-message.visible {
+            opacity: 0.5;
+        }
+
         /* =========================================
            7. INTERACTIVE UI (BUTTONS)
            ========================================= */
@@ -225,7 +255,7 @@
             gap: 16px;
             opacity: 0;
             transition: opacity 1.5s ease;
-            pointer-events: none; /* Disabled until faded in */
+            pointer-events: none;
         }
 
         #choices-container.visible {
@@ -349,13 +379,12 @@
 
     <script>
         /* =========================================
-           1. ADVANCED AUDIO ENGINE (Web Audio API)
+           1. AUDIO ENGINE — sparse, atmospheric
            ========================================= */
         const AudioEngine = (function() {
             let ctx = null;
             let masterGain = null;
-            let ambientOscillators = [];
-            let noiseSource = null;
+            let droneOsc = null;
 
             function init() {
                 if (ctx) return;
@@ -365,117 +394,99 @@
                 masterGain = ctx.createGain();
                 masterGain.connect(ctx.destination);
                 masterGain.gain.value = 0;
-                
-                // Fade in master volume slowly
-                masterGain.gain.setTargetAtTime(0.8, ctx.currentTime, 5);
+                masterGain.gain.setTargetAtTime(0.22, ctx.currentTime, 5);
 
-                startAmbientHum();
-                startChimes();
+                startDrone();
+                scheduleAmbientEvents();
             }
 
-            function startAmbientHum() {
-                // 1. Ultra-soft, low-pass filtered brown noise (Breath of the cavern)
-                const bufferSize = ctx.sampleRate * 2;
-                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                const data = buffer.getChannelData(0);
-                let lastOut = 0;
-                for (let i = 0; i < bufferSize; i++) {
-                    const white = Math.random() * 2 - 1;
-                    data[i] = (lastOut + (0.02 * white)) / 1.02; // Brown noise approximation
-                    lastOut = data[i];
-                    data[i] *= 3.5; // Compensate gain
-                }
+            function startDrone() {
+                droneOsc = ctx.createOscillator();
+                droneOsc.type = 'sine';
+                droneOsc.frequency.value = 55;
                 
-                noiseSource = ctx.createBufferSource();
-                noiseSource.buffer = buffer;
-                noiseSource.loop = true;
+                const lfo = ctx.createOscillator();
+                lfo.type = 'sine';
+                lfo.frequency.value = 0.01;
+
+                const droneGain = ctx.createGain();
+                droneGain.gain.value = 0.08;
+                lfo.connect(droneGain.gain);
 
                 const filter = ctx.createBiquadFilter();
                 filter.type = 'lowpass';
-                filter.frequency.value = 180; // Very muffled
+                filter.frequency.value = 90;
 
-                const noiseVolume = ctx.createGain();
-                noiseVolume.gain.value = 0.001; // Extremely quiet background presence
+                droneOsc.connect(filter);
+                filter.connect(droneGain);
+                droneGain.connect(masterGain);
 
-                noiseSource.connect(filter);
-                filter.connect(noiseVolume);
-                noiseVolume.connect(masterGain);
-                noiseSource.start();
-
-                // 2. Deep, evolving pads (Sine waves with slow LFOs)
-                const createDrone = (freq, lfoRate, vol) => {
-                    const osc = ctx.createOscillator();
-                    osc.type = 'sine';
-                    osc.frequency.value = freq;
-                    
-                    const lfo = ctx.createOscillator();
-                    lfo.type = 'sine';
-                    lfo.frequency.value = lfoRate;
-                    
-                    const gain = ctx.createGain();
-                    
-                    const maxGain = ctx.createGain();
-                    maxGain.gain.value = vol;
-
-                    lfo.connect(gain.gain);
-                    osc.connect(gain);
-                    gain.connect(maxGain);
-                    maxGain.connect(masterGain);
-                    
-                    osc.start();
-                    lfo.start();
-                    ambientOscillators.push({ osc, lfo, maxGain, baseVol: vol });
-                };
-
-                // C Minor / Eb Major feel
-                createDrone(98.00, 0.015, 0.08);  // G2
-                createDrone(130.81, 0.02, 0.06);  // C3
-                createDrone(155.56, 0.01, 0.04);  // Eb3
+                droneOsc.start();
+                lfo.start();
             }
 
-            function startChimes() {
-                const scale = [261.63, 311.13, 392.00, 466.16, 523.25]; // C minor pentatonic
-                
-                function playRandomChime() {
-                    if (Math.random() > 0.4) {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        
-                        osc.type = 'sine';
-                        osc.frequency.value = scale[Math.floor(Math.random() * scale.length)];
-                        
-                        gain.gain.setValueAtTime(0, ctx.currentTime);
-                        gain.gain.linearRampToValueAtTime(0.10, ctx.currentTime + 0.5);
-                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 8);
-                        
-                        osc.connect(gain);
-                        gain.connect(masterGain);
-                        
-                        osc.start();
-                        osc.stop(ctx.currentTime + 8);
-                    }
-                    setTimeout(playRandomChime, 3000 + Math.random() * 5000);
+            function scheduleAmbientEvents() {
+                const types = ['wind', 'wind', 'chime', 'drip', 'drip', 'drip'];
+                function scheduleNext() {
+                    const type = types[Math.floor(Math.random() * types.length)];
+                    const intervals = { wind: 22000, chime: 50000, drip: 10000 };
+                    const base = intervals[type] || 5000;
+                    const delay = base + Math.random() * base * 0.7;
+                    setTimeout(() => {
+                        if (type === 'wind') playWind();
+                        else if (type === 'chime') playChime();
+                        else if (type === 'drip') playDrip();
+                        scheduleNext();
+                    }, delay);
                 }
-                playRandomChime();
+                scheduleNext();
             }
 
-            // Interactive Sounds
-            function playHoverSound() {
-                if (!ctx) return;
+            function playWind() {
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
-                
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(100 + Math.random() * 60, ctx.currentTime);
                 gain.gain.setValueAtTime(0, ctx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.02, ctx.currentTime + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
-                
+                gain.gain.linearRampToValueAtTime(0.012, ctx.currentTime + 2);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 7);
                 osc.connect(gain);
                 gain.connect(masterGain);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.1);
+                osc.stop(ctx.currentTime + 7);
+            }
+
+            function playChime() {
+                const freq = [261.63, 311.13, 392.00][Math.floor(Math.random() * 3)];
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.value = freq;
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.07, ctx.currentTime + 0.6);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 8);
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(ctx.currentTime + 8);
+            }
+
+            function playDrip() {
+                const bufferSize = Math.floor(ctx.sampleRate * 0.25);
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 5);
+                }
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                const gain = ctx.createGain();
+                gain.gain.setValueAtTime(0.025, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.35);
+                source.connect(gain);
+                gain.connect(masterGain);
+                source.start();
+                source.stop(ctx.currentTime + 0.35);
             }
 
             function playClickSound() {
@@ -483,41 +494,31 @@
                 const osc = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(150, ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.2);
-                
-                gain.gain.setValueAtTime(0, ctx.currentTime);
-                gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.01);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-                
+                osc.frequency.setValueAtTime(160, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(55, ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.03, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
                 osc.connect(gain);
                 gain.connect(masterGain);
                 osc.start();
-                osc.stop(ctx.currentTime + 0.2);
+                osc.stop(ctx.currentTime + 0.25);
             }
 
             function shiftMood(mood) {
-                if (!ctx) return;
-                // Shift ambient frequencies slightly based on narrative location
-                const targets = mood === 'dark' ? [92.50, 123.47, 146.83] : // F# minor feel
-                                mood === 'light' ? [130.81, 164.81, 196.00] : // C major feel
-                                [98.00, 130.81, 155.56]; // Default C minor
-                
-                ambientOscillators.forEach((oscObj, index) => {
-                    if (targets[index]) {
-                        oscObj.osc.frequency.setTargetAtTime(targets[index], ctx.currentTime, 3);
-                    }
-                });
+                if (!droneOsc) return;
+                const freqMap = { dark: 46.25, light: 61.74, default: 55 };
+                droneOsc.frequency.setTargetAtTime(freqMap[mood] || 55, ctx.currentTime, 4);
             }
 
-            return { init, playHoverSound, playClickSound, shiftMood };
+            return { init, playClickSound, shiftMood };
         })();
 
         /* =========================================
-           2. VISUAL ENGINE (Spores & Background)
+           2. VISUAL ENGINE
            ========================================= */
         function initVisuals() {
             const container = document.getElementById('spores-container');
+            const spores = [];
             for (let i = 0; i < 40; i++) {
                 const spore = document.createElement('div');
                 spore.classList.add('spore');
@@ -525,30 +526,69 @@
                 spore.style.width = `${size}px`;
                 spore.style.height = `${size}px`;
                 spore.style.left = `${Math.random() * 100}vw`;
-                
-                // Randomize animations
                 const floatDur = Math.random() * 35 + 25;
                 const pulseDur = Math.random() * 4 + 3;
                 const delay = Math.random() * -50;
-                
                 spore.style.animation = `float-up ${floatDur}s linear infinite ${delay}s, float-pulse ${pulseDur}s ease-in-out infinite alternate ${delay}s`;
                 container.appendChild(spore);
+                spores.push({ el: spore, baseX: parseFloat(spore.style.left), sensitivity: 0.4 + Math.random() * 0.6 });
             }
 
-            // Mouse tracking for subtle parallax gradient
             document.addEventListener('mousemove', (e) => {
-                const x = (e.clientX / window.innerWidth) * 100;
-                const y = (e.clientY / window.innerHeight) * 100;
+                const xRatio = e.clientX / window.innerWidth;
+                const yRatio = e.clientY / window.innerHeight;
+                spores.forEach(sp => {
+                    const offsetX = (xRatio - 0.5) * 12 * sp.sensitivity;
+                    sp.el.style.transform = `translateX(${offsetX}px)`;
+                });
                 const bg = document.getElementById('bg-glow');
-                // The base colors are controlled by CSS variables updated in state, we just move the radial center
-                bg.style.backgroundPosition = `${x}% ${y}%`;
+                bg.style.backgroundPosition = `${xRatio * 100}% ${yRatio * 100}%`;
             });
         }
 
         /* =========================================
-           3. GAME STATE & NARRATIVE DATA
+           3. TYPEWRITER ENGINE
+           ========================================= */
+        function typeNode(element, htmlString, speed = 25, callback) {
+            const tokens = htmlString.match(/(<[^>]*>|[^<]+)/g) || [];
+            let currentIndex = 0;
+            let charIndex = 0;
+            element.innerHTML = '';
+            const cursor = document.createElement('span');
+            cursor.className = 'typewriter-cursor';
+            element.appendChild(cursor);
+
+            function step() {
+                if (currentIndex >= tokens.length) {
+                    cursor.remove();
+                    if (callback) callback();
+                    return;
+                }
+                const token = tokens[currentIndex];
+                if (token.startsWith('<')) {
+                    element.insertAdjacentHTML('beforeend', token);
+                    currentIndex++;
+                    step();
+                } else {
+                    if (charIndex < token.length) {
+                        element.insertAdjacentHTML('beforeend', token.charAt(charIndex));
+                        charIndex++;
+                        setTimeout(step, speed);
+                    } else {
+                        charIndex = 0;
+                        currentIndex++;
+                        step();
+                    }
+                }
+            }
+            step();
+        }
+
+        /* =========================================
+           4. GAME STATE & NARRATIVE
            ========================================= */
         const gameState = {
+            currentNode: 'start',
             memories: [],
             flags: {
                 examinedMicroscope: false,
@@ -556,39 +596,39 @@
                 mothHelped: false,
                 flytrapHealed: false,
                 beetleMet: false,
-                realizedScale: false
+                satDown: false,
+                lookedAround: false
             }
         };
 
         const storyNodes = {
             start: {
-                title: "Local Time: 02:14 AM",
+                title: "02:14 AM",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 30, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "You are eleven hours deep into a localized ecosystem analysis.",
-                    "You’ve always had a problem with moving too fast—a flaw the DVLA recently formalized—but right now, the microscopic world demands total, agonizing patience.",
-                    "Your workspace is absurdly over-engineered. There is enough scaffolding holding up your lights to support a small architectural digest project. Beneath a stack of scattered notes, the spine of a fantasy novel peeks out next to a Victorian botanical journal."
+                    "You've been staring at cells for eleven hours. This is normal for you. You're not sure if that's a good thing.",
+                    "The tape holding the lamp together is coming unstuck again. A red-and-white corner of something — a ticket stub, maybe — is wedged under the microscope for balance. Your watch slides halfway down your arm when you lean forward. You still haven't got round to fixing the strap.",
+                    "Beneath a stack of lab notes: Darwin's <em>Insectivorous Plants</em>, spine cracked open at page 87, and a copy of <em>The Atlas Six</em> face-down, halfway through. Someone left a mug ring on the cover. You weren't that someone, but you still feel guilty about it."
                 ],
                 choices: [
                     { 
-                        text: "Examine the slide.", 
+                        text: "Peer into the microscope.", 
                         target: "microscope",
-                        type: "examine",
-                        condition: () => !gameState.flags.examinedMicroscope 
+                        type: "examine"
                     },
                     { 
-                        text: "Lean over the primary sample.", 
-                        target: "the_fall" 
+                        text: "Reach across for the pipette.", 
+                        target: "the_fall"
                     }
                 ]
             },
             microscope: {
-                title: "The Lens",
+                title: "Under the lens",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 30, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "You adjust the coarse focus. The cellular walls come into sharp relief. There is an entire, frantic universe happening down there, completely oblivious to the giant watching them.",
+                    "Cell walls slide into focus. Frantic, organised, completely unaware a giant is watching.",
                     "<span class='inner-thought'>It must be nice, having walls that thick.</span>"
                 ],
                 choices: [
@@ -600,115 +640,178 @@
                 ]
             },
             the_fall: {
-                title: "Terminal Velocity",
+                title: "Terminal velocity",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(5, 15, 20, 0.6) 0%, rgba(1, 4, 2, 1) 100%)",
                 mood: "dark",
                 content: [
-                    "You reach across the bench for the pipette.",
-                    "You misjudge the distance. A sleeve catches an edge. You slip.",
-                    "The floor doesn't just rush up to meet you; the geometry of the room fractures. The air grows thick. The desk lamps warp into distant, burning suns. You are falling, but it feels like you are shrinking into the space between the atoms."
+                    "Your sleeve catches the tape. You lurch forward. For one stupid, entirely avoidable second, you're airborne.",
+                    "The room doesn't just tilt. It fractures. The lamp becomes a burning sun. The floor rushes up — or you rush down. Hard to tell. You're shrinking into the space between things.",
+                    "Someone once told you you move too fast. They weren't wrong."
                 ],
                 choices: [
                     { text: "Brace for impact.", target: "adrift" }
                 ]
             },
             adrift: {
-                title: "The Nectar Sea",
+                title: "The nectar sea",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(30, 20, 10, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "When you open your eyes, you are exactly four millimetres tall.",
-                    "You are floating on a piece of fibrous debris in a massive, glowing puddle of amber fluid. It’s a bit like being trapped on a lifeboat with a tiger, except the tiger is the boat, and it is slowly, enzymatically trying to digest you."
+                    "You open your eyes. You're maybe four millimetres tall. Perspective is hard when everything is a hundred times larger than it should be.",
+                    "The surface beneath you gives slightly. Sticky. Amber. Digestive enzymes.",
+                    "Oh.",
+                    "<span class='inner-thought'>You've read about this exact scenario. Darwin would have had opinions.</span>"
                 ],
                 choices: [
                     { 
-                        text: "Examine the fluid.", 
+                        text: "Dip your fingers in the fluid.", 
                         target: "examine_nectar",
                         type: "examine",
                         condition: () => !gameState.flags.examinedNectar 
                     },
-                    { text: "Paddle toward the solid edge.", target: "shore" }
+                    { text: "Grab the piece of fibre floating nearby.", target: "raft" }
                 ]
             },
             examine_nectar: {
-                title: "Digestive Fluids",
+                title: "Acid test",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(40, 25, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "dark",
                 content: [
-                    "It’s highly viscous. A complex cocktail of acid phosphatases and proteases. You recognize the chemical signature immediately. It’s a pitcher plant.",
-                    "<span class='inner-thought'>At least it's an academically interesting way to die.</span>"
+                    "It stings. Acid phosphatases. Proteases. Pitcher plant. Textbook.",
+                    "Fuck."
                 ],
                 choices: [
                     { 
-                        text: "Focus on surviving instead.", 
+                        text: "Focus. Survive first, analyse later.", 
                         target: "adrift",
                         action: () => gameState.flags.examinedNectar = true
                     }
                 ]
             },
+            raft: {
+                title: "Fibrous debris",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(30, 20, 10, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "A strip of plant fibre drifts past. You grab it. It's not a life raft. It's already starting to soften in the enzymes.",
+                    "You've been in worse situations. Probably. You'll remember one later."
+                ],
+                choices: [
+                    { text: "Paddle toward the solid edge.", target: "shore" }
+                ]
+            },
             shore: {
-                title: "The Understory",
+                title: "The rim",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
-                    "You pull yourself onto the waxy green rim, boots slipping slightly on the cuticle layer. The air here smells wildly of ozone and crushed leaves.",
-                    "Bioluminescent spores drift through the cavernous space like snow. The towering silhouettes of carnivorous plants loom above you, casting long, alien shadows against the distant, artificial sky of your desk lamp.",
-                    "It is terrifying. It is undeniably beautiful."
+                    "You haul yourself onto the waxy green cuticle. Solid ground. Relatively speaking.",
+                    "It's quiet. It's been quiet this whole time, you realise. The kind of quiet that isn't empty — it's just been going on without you.",
+                    "You stand still for a moment. Something moves. You freeze. It isn't an animal. Just a leaf, slowly folding back on itself.",
+                    "The air smells like wet leaves and something faintly metallic. Distant chimes. Water dripping somewhere you can't see."
                 ],
                 choices: [
-                    { text: "Venture into the undergrowth.", target: "crossroads", action: () => showSidebar() }
+                    { text: "Look around properly.", target: "look_around", condition: () => !gameState.flags.lookedAround },
+                    { text: "Venture forward.", target: "crossroads", action: () => showSidebar() }
+                ]
+            },
+            look_around: {
+                title: "Taking it in",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "You let yourself take it in. The scale of everything. Bioluminescent spores drifting in the air like suspended stars. The distant, blurred glow of your desk lamp — now a kind of moon.",
+                    "It's beautiful. It's also a carnivorous plant habitat, which means everything here is trying to eat something. But beautiful nonetheless.",
+                    "<span class='inner-thought'>You mentally file this under: worth the inconvenience.</span>"
+                ],
+                choices: [
+                    { 
+                        text: "Alright. Move on.", 
+                        target: "crossroads", 
+                        action: () => {
+                            gameState.flags.lookedAround = true;
+                            addMemory("A world inside a world. Worth the inconvenience.");
+                            showSidebar();
+                        }
+                    }
                 ]
             },
             crossroads: {
-                title: "The Junction",
+                title: "Three ways",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "The path splinters into three directions through the towering stems.",
-                    "From the left, you hear a frantic, uneven fluttering. Straight ahead, the main thoroughfare is blocked by a massive cluster of wilted leaves. To your right, there is a rhythmic, stubborn tapping.",
-                    "Far above, the metallic rim of the stool leg stretches into the heavens. The only way out."
+                    "Three directions. Left: frantic, uneven fluttering. Centre: a massive leaf blocking the path, swollen and sick-looking. Right: a steady, deliberate <em>tap tap tap</em>.",
+                    "And straight up — the stool leg. The only way back. Polished steel. No handholds. You do the maths automatically. It's not possible alone.",
+                    "You can feel the responsible-decision part of your brain already spinning up."
                 ],
                 choices: [
                     { text: "Follow the fluttering sound.", target: "moth_approach", condition: () => !gameState.flags.mothHelped },
-                    { text: "Inspect the central blockage.", target: "flytrap_approach", condition: () => !gameState.flags.flytrapHealed },
+                    { text: "Examine the blocked central path.", target: "flytrap_approach", condition: () => !gameState.flags.flytrapHealed },
                     { text: "Find the source of the tapping.", target: "beetle_approach", condition: () => !gameState.flags.beetleMet },
-                    { text: "Approach the base of the stool leg.", target: "climax_base", condition: () => gameState.flags.mothHelped || gameState.flags.flytrapHealed || gameState.flags.beetleMet }
+                    { text: "Sit down for a minute.", target: "sit_down", condition: () => !gameState.flags.satDown },
+                    { text: "Head to the base of the stool leg.", target: "climax_base", condition: () => gameState.flags.mothHelped || gameState.flags.flytrapHealed || gameState.flags.beetleMet }
+                ]
+            },
+            sit_down: {
+                title: "A minute",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "You sit on a pebble. The moss is damp. Your watch reads something — the face is too small now to make sense.",
+                    "You're not good at stopping. You know this about yourself. People have mentioned it. Gently. More than once.",
+                    "It's not the worst thing, being still for a second. Even if the pebble is slightly uncomfortable."
+                ],
+                choices: [
+                    { text: "Get up.", target: "crossroads", action: () => { gameState.flags.satDown = true; addMemory("A moment of stillness, on a damp pebble."); } }
                 ]
             },
             moth_approach: {
-                title: "Fallen Aviator",
+                title: "Fallen aviator",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
-                    "You push through the dew-heavy ferns and find a lunar moth.",
-                    "It is a magnificent, pale-green creature, but it is grounded. Its left wing is badly torn along the primary vein, dragging in the dirt.",
-                    "This isn't exactly your jurisdiction, but you’ve always had a fascination with how broken things can be engineered to work again."
+                    "A luna moth lies on the ground. Pale green. One wing torn along the primary vein. It flutters violently when it notices you.",
+                    "Not a threat. Just scared."
                 ],
                 choices: [
-                    { text: "Assess the structural damage.", target: "moth_craft", type: "examine" }
+                    { text: "Crouch down. Move slowly.", target: "moth_trust" }
+                ]
+            },
+            moth_trust: {
+                title: "Slow approach",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "You stay low. It takes a full minute before the moth stops dragging itself away.",
+                    "The wing is salvageable. You've fixed worse. You once rigged a temporary brace for a— well. That's a different story.",
+                    "The point is: you know what you're doing."
+                ],
+                choices: [
+                    { text: "Look for materials.", target: "moth_craft", type: "examine" }
                 ]
             },
             moth_craft: {
-                title: "Field Prosthetics",
+                title: "Field prosthetics",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
-                    "You need something lightweight but high-tension. You strip a micro-fiber from a nearby dried root system and isolate a drop of plant resin.",
-                    "Working with pharmaceutical-grade precision, you piece together a delicate, highly functional brace along the tear.",
-                    "The moth flexes it. The geometry holds."
+                    "Dried root fibre. One bead of plant resin. Your hands are shaking slightly — you tell yourself it's the scale, not the fear of making things worse.",
+                    "You splint the tear. It holds. Clean work."
                 ],
                 choices: [
-                    { text: "Step back and let it test the wing.", target: "moth_reward" }
+                    { text: "Wait. See if it flies.", target: "moth_reward" }
                 ]
             },
             moth_reward: {
-                title: "An Offering",
+                title: "Lift off",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
-                    "The moth tests the aerodynamics. It hovers, lifting effortlessly into the heavy air. Before it leaves, it lands briefly by your boots, nudging a soft, powdery pink object toward you.",
-                    "It’s a gummy. It smells distinctly of British supermarkets. Where a moth acquired this is a mystery you choose not to investigate.",
-                    "<span class='inner-thought'>You put the Percy Pig in your pocket.</span>"
+                    "The moth tests the wing. Flexes. Lifts. Hovers.",
+                    "Before it disappears into the canopy, it drops something small and pink at your feet.",
+                    "A Percy Pig.",
+                    "You have absolutely no idea where a moth acquired a Percy Pig. You decide, wisely, not to investigate further. You put it in your pocket."
                 ],
                 choices: [
                     { 
@@ -716,34 +819,33 @@
                         target: "crossroads", 
                         action: () => {
                             gameState.flags.mothHelped = true;
-                            addMemory("A prosthetic wing, engineered in the dark.");
+                            addMemory("A prosthetic wing. A mysterious gummy.");
                         }
                     }
                 ]
             },
             flytrap_approach: {
-                title: "Cellular Breakdown",
+                title: "Sick leaf",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(45, 10, 15, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "dark",
                 content: [
-                    "The central path is completely walled off by a colossal Venus flytrap. It looks terrible.",
-                    "The hinges of its jaw are swollen, locked shut, and deeply discolored. The tissue is weeping a milky fluid. It's a textbook bacterial bloom.",
-                    "You don't even have to think about it. Cellular breakdown is practically your second language."
+                    "The Venus flytrap is colossal. Its jaw is locked shut, swollen, weeping a thin milky fluid.",
+                    "Bacterial bloom. You'd know this anywhere. Carnivorous plants are sort of your thing."
                 ],
                 choices: [
-                    { text: "Swab the hinge and diagnose.", target: "flytrap_diagnose", type: "examine" }
+                    { text: "Swab the hinge. Diagnose properly.", target: "flytrap_diagnose", type: "examine" }
                 ]
             },
             flytrap_diagnose: {
-                title: "Microbiology",
+                title: "Diagnosis",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(45, 10, 15, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "dark",
                 content: [
-                    "Highly acidic. The localized environment is preventing the plant's natural immune response.",
-                    "You need a base to neutralize the bloom. You scour the perimeter, finding a patch of limestone-rich moss. You synthesize a quick, concentrated alkaline drop using the dew on a spider web."
+                    "Highly acidic. The plant's immune response is blocked. Classic presentation.",
+                    "You need a base. Limestone moss, spiderweb dew — you mix a concentrated alkaline drop with the focus of someone who has definitely done this kind of thing before."
                 ],
                 choices: [
-                    { text: "Apply the drop directly to the infection.", target: "flytrap_cure" }
+                    { text: "Apply the drop directly.", target: "flytrap_cure" }
                 ]
             },
             flytrap_cure: {
@@ -751,75 +853,76 @@
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "The reaction is instantaneous. The acid neutralizes with a soft hiss.",
-                    "The flytrap shudders violently. The swelling in the hinge recedes before your eyes. With a heavy, groaning creak, the massive spiked jaws slowly open, revealing the path forward."
+                    "The fluid hisses. Neutralises. The jaw cracks open slowly, heavily.",
+                    "You pat the leaf. 'There you go,' you mutter. It doesn't reply. You didn't expect it to. But still.",
+                    "Path clear."
                 ],
                 choices: [
                     { 
-                        text: "Give the giant leaf a gentle pat and step back.", 
+                        text: "Step back.", 
                         target: "crossroads",
                         action: () => {
                             gameState.flags.flytrapHealed = true;
-                            addMemory("A bacterial bloom, neutralized.");
+                            addMemory("A flytrap, healed. You talked to a plant.");
                         }
                     }
                 ]
             },
             beetle_approach: {
-                title: "The Sentinel",
+                title: "The tapping",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "Following the tapping sound, you find a rhinoceros beetle sitting entirely alone on a smooth pebble.",
-                    "It has draped a torn scrap of red-and-white fabric over its shell like a cape. It is staring out into the dark undergrowth with the brooding, theatrical intensity of a plastic vigilante."
+                    "A rhinoceros beetle sits alone on a smooth pebble. A torn scrap of red-and-white fabric is draped over its shell — not tied, just hanging there, like a cape.",
+                    "It's staring into the dark undergrowth with the quiet intensity of someone who takes their job extremely seriously.",
+                    "It doesn't acknowledge you."
                 ],
                 choices: [
-                    { text: "Approach slowly.", target: "beetle_standoff" }
+                    { text: "Stand beside it.", target: "beetle_standoff" }
                 ]
             },
             beetle_standoff: {
-                title: "Silent Watch",
+                title: "Silent watch",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "It doesn't move as you approach. It just keeps staring into the abyss.",
-                    "There is no puzzle here. No biological imperative to fix. Sometimes, things just need someone to stand next to them in the dark for a minute.",
-                    "You step up onto the pebble and stand beside him, looking out at the same empty patch of leaves."
+                    "You step up onto the pebble. The beetle doesn't move. You don't either.",
+                    "There's no problem to solve here. Sometimes things just need someone to stand next to them in the dark for a minute."
                 ],
                 choices: [
-                    { text: "Nod respectfully at the cape.", target: "beetle_bond" }
+                    { text: "\"Nice cape.\"", target: "beetle_bond" }
                 ]
             },
             beetle_bond: {
-                title: "The Bond",
+                title: "Acknowledged",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
-                    "The beetle turns its massive horned head and nods back.",
-                    "An unspoken, deeply serious bond of respect has been formed. He stands guard. He is ready."
+                    "The beetle turns its massive horned head. Looks at you. Nods once.",
+                    "Then it goes back to its watch. The tapping resumes. Slower now.",
+                    "An understanding has been reached."
                 ],
                 choices: [
                     { 
-                        text: "Leave him to his watch.", 
+                        text: "Leave him to it.", 
                         target: "crossroads",
                         action: () => {
                             gameState.flags.beetleMet = true;
-                            addMemory("A vigilante in red and white, acknowledged.");
+                            addMemory("A vigilante in red and white. A nod of respect.");
                         }
                     }
                 ]
             },
             climax_base: {
-                title: "The Ascent",
+                title: "The ascent",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(10, 20, 30, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "dark",
                 content: [
-                    "You reach the center of the clearing. The leg of the metal stool stretches up into the darkness like a polished steel skyscraper.",
-                    "You run the physics in your head. The friction coefficient of the metal. Your current mass. The sheer vertical drop.",
-                    "It’s physically impossible to climb alone."
+                    "The stool leg is polished steel. No handholds. No texture. You run the friction coefficients in your head. Then you run them again, hoping for a different answer.",
+                    "It's impossible alone. You hate that. You've always hated that."
                 ],
                 choices: [
-                    { text: "Stand at the base of the metal.", target: "climax_despair" }
+                    { text: "Stand at the base. Look up.", target: "climax_despair" }
                 ]
             },
             climax_despair: {
@@ -827,24 +930,23 @@
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(5, 10, 15, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "dark",
                 content: [
-                    "You stand there for a moment. The heavy, isolated quiet of the lab settles over you, magnified a thousand times by your size.",
-                    "You spend so much of your life quietly keeping the gears turning. It's nice, just this once, to let the world do the work for you.",
-                    "You close your eyes. You prepare to figure out another impossible solution on your own."
+                    "You close your eyes. You've spent a long time being the one who fixes things. Who holds things together. It's what you do.",
+                    "But just for a second — you're tired. And the maths doesn't work.",
+                    "You stand there. Waiting. Not sure what for."
                 ],
                 choices: [
                     { text: "Turn around.", target: "climax_rescue" }
                 ]
             },
             climax_rescue: {
-                title: "The Lift",
+                title: "The lift",
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 45, 30, 0.7) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "light",
                 content: [
                     "The air shifts.",
-                    "The lunar moth descends silently from the canopy, hovering steadily at shoulder height.",
-                    "The rhinoceros beetle marches out of the undergrowth, bracing its massive frame against your boots to give you the initial boost.",
-                    "And from the darkness above, the healed flytrap lowers a thick, sturdy vine, draped perfectly against the steel.",
-                    "<span class='inner-thought'>It is nice, just this once, to let the world hold you together instead.</span>"
+                    "The moth descends. The beetle braces against your boots. The flytrap lowers a thick, steady vine.",
+                    "You didn't ask. They came anyway.",
+                    "It's been a long time since you let someone else do the heavy lifting. Literally. Maybe you should try it more often."
                 ],
                 choices: [
                     { text: "Take hold of the vine.", target: "ending" }
@@ -855,16 +957,17 @@
                 bgGradient: "radial-gradient(circle at 50% 110%, rgba(30, 50, 40, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
                 mood: "default",
                 content: [
-                    "You are pulled up through the glowing air, past the precipice of the desk, back to where you belong.",
-                    "The scale shifts violently again. The world snaps back to standard dimensions. You are sitting in your chair. The desk lamp is just a lamp. The Victorian journal sits quietly.",
-                    "<span class='inner-thought' style='font-size: 0.85rem; letter-spacing: 0.05em; margin-top: 40px; display: block;'>You mentally log the experience: four and a half stars. Beautiful cinematography, incredibly compelling supporting cast, but the nectar tasted like battery acid.</span>"
+                    "You're back. The chair is just a chair. The lamp is just the lamp. The mug ring on <em>The Atlas Six</em> is still there. Your watch fits again.",
+                    "You check your pocket. The Percy Pig is gone. Probably for the best.",
+                    "You mentally log the experience: four and a half stars. Beautiful cinematography, compelling supporting cast, but the nectar tasted like battery acid.",
+                    "You stand up. The floor is solid. You make a note to fix the tape on the lamp."
                 ],
-                choices: []
+                choices: [] // End of game — final message appears after a pause
             }
         };
 
         /* =========================================
-           4. DOM ELEMENTS & RENDERING ENGINE
+           5. RENDERING & STATE MANAGEMENT
            ========================================= */
         const textContainer = document.getElementById('text-container');
         const choicesContainer = document.getElementById('choices-container');
@@ -874,18 +977,18 @@
         const sidebar = document.getElementById('sidebar');
         const memoryList = document.getElementById('memory-list');
 
+        let finalMessageTimer = null; // for the hidden ending message
+
         function addMemory(text) {
             if (gameState.memories.includes(text)) return;
             gameState.memories.push(text);
-            
             const li = document.createElement('li');
             li.className = 'memory-item';
             li.innerText = text;
             memoryList.appendChild(li);
-            
-            // Trigger reflow and fade in
-            void li.offsetWidth; 
+            void li.offsetWidth;
             li.classList.add('visible');
+            saveGame();
         }
 
         function showSidebar() {
@@ -894,99 +997,168 @@
             }
         }
 
-        function renderNode(nodeId) {
-            AudioEngine.init(); 
-            if(audioPrompt) audioPrompt.style.opacity = '0'; // Fade out gently
+        let typewriterActive = false;
 
+        function renderNode(nodeId) {
+            if (typewriterActive) return;
+            // Clear any pending final message timer
+            if (finalMessageTimer) {
+                clearTimeout(finalMessageTimer);
+                finalMessageTimer = null;
+            }
+
+            AudioEngine.init();
+            if(audioPrompt) audioPrompt.style.opacity = '0';
             const node = storyNodes[nodeId];
-            
-            // 1. Shift Atmosphere
+            if (!node) return;
             bgGlow.style.background = node.bgGradient;
             AudioEngine.shiftMood(node.mood);
 
-            // 2. Hide current content
             sceneTitle.classList.remove('visible');
             choicesContainer.classList.remove('visible');
-            
-            const oldParagraphs = document.querySelectorAll('.story-paragraph');
-            oldParagraphs.forEach(p => p.classList.remove('visible'));
+            const existingParas = document.querySelectorAll('.story-paragraph');
+            existingParas.forEach(p => p.classList.add('fade-out'));
+            // Remove any old final message
+            const oldFinal = document.querySelector('.final-message');
+            if (oldFinal) oldFinal.remove();
 
-            // 3. Render new content after fade out
             setTimeout(() => {
                 textContainer.innerHTML = '';
                 choicesContainer.innerHTML = '';
+                typewriterActive = true;
 
-                // Render Title
                 sceneTitle.innerText = node.title;
                 sceneTitle.classList.add('visible');
 
-                // Render Paragraphs sequentially
-                let delay = 300;
-                node.content.forEach((textLine, index) => {
+                let paraIndex = 0;
+                function typeNextParagraph() {
+                    if (paraIndex >= node.content.length) {
+                        showChoices(node);
+                        typewriterActive = false;
+
+                        // If this is the ending, schedule the hidden message
+                        if (nodeId === 'ending') {
+                            finalMessageTimer = setTimeout(() => {
+                                const msg = document.createElement('p');
+                                msg.className = 'final-message';
+                                // Change the initial below to yours if needed
+                                msg.innerHTML = 'Thanks for playing. &mdash; S';
+                                textContainer.appendChild(msg);
+                                void msg.offsetWidth;
+                                msg.classList.add('visible');
+                            }, 7000); // appears after 7 seconds of quiet
+                        }
+                        return;
+                    }
                     const p = document.createElement('p');
                     p.className = 'story-paragraph';
-                    p.innerHTML = textLine;
+                    p.style.opacity = '1';
                     textContainer.appendChild(p);
-                    
-                    setTimeout(() => {
-                        p.classList.add('visible');
-                    }, delay);
-                    
-                    // Calculate delay based on reading length (approx 40ms per char)
-                    const readingTime = textLine.replace(/<[^>]*>?/gm, '').length * 30; 
-                    delay += Math.min(Math.max(readingTime, 800), 2500); 
-                });
-
-                // Render Choices
-                setTimeout(() => {
-                    node.choices.forEach(choice => {
-                        if (choice.condition && !choice.condition()) return;
-                        
-                        const btn = document.createElement('button');
-                        if (choice.type === 'examine') btn.classList.add('btn-examine');
-                        
-                        const span = document.createElement('span');
-                        span.innerText = choice.text;
-                        btn.appendChild(span);
-                        
-                        btn.addEventListener('mouseenter', () => AudioEngine.playHoverSound());
-                        btn.addEventListener('click', () => {
-                            AudioEngine.playClickSound();
-                            if (choice.action) choice.action();
-                            renderNode(choice.target);
-                        });
-                        
-                        choicesContainer.appendChild(btn);
+                    typeNode(p, node.content[paraIndex], 25, () => {
+                        paraIndex++;
+                        setTimeout(typeNextParagraph, 250);
                     });
-                    
-                    choicesContainer.classList.add('visible');
-                }, delay + 500);
-
-            }, 1000); 
+                }
+                typeNextParagraph();
+            }, 800);
         }
 
-        // --- INITIALIZATION ---
+        function showChoices(node) {
+            node.choices.forEach(choice => {
+                if (choice.condition && !choice.condition()) return;
+                const btn = document.createElement('button');
+                if (choice.type === 'examine') btn.classList.add('btn-examine');
+                const span = document.createElement('span');
+                span.innerText = choice.text;
+                btn.appendChild(span);
+                btn.addEventListener('click', () => {
+                    AudioEngine.playClickSound();
+                    if (choice.action) choice.action();
+                    gameState.currentNode = choice.target;
+                    saveGame();
+                    renderNode(choice.target);
+                });
+                choicesContainer.appendChild(btn);
+            });
+            choicesContainer.classList.add('visible');
+        }
+
+        /* =========================================
+           6. SAVE / LOAD
+           ========================================= */
+        function saveGame() {
+            const state = {
+                currentNode: gameState.currentNode,
+                flags: gameState.flags,
+                memories: gameState.memories
+            };
+            localStorage.setItem('understory_save', JSON.stringify(state));
+        }
+
+        function loadGame() {
+            const raw = localStorage.getItem('understory_save');
+            if (!raw) return false;
+            try {
+                const saved = JSON.parse(raw);
+                gameState.currentNode = saved.currentNode || 'start';
+                gameState.flags = saved.flags || { ...gameState.flags };
+                gameState.memories = saved.memories || [];
+                gameState.memories.forEach(m => {
+                    const li = document.createElement('li');
+                    li.className = 'memory-item';
+                    li.innerText = m;
+                    memoryList.appendChild(li);
+                    void li.offsetWidth;
+                    li.classList.add('visible');
+                });
+                if (gameState.memories.length > 0) showSidebar();
+                return true;
+            } catch(e) {
+                return false;
+            }
+        }
+
+        /* =========================================
+           7. INITIALIZATION
+           ========================================= */
         window.onload = () => {
             initVisuals();
-            
-            // Wait for user interaction to start (solves Audio autoplay issues)
+            const hasSave = loadGame();
+
             const startBtn = document.createElement('button');
             const span = document.createElement('span');
-            span.innerText = "Initialize Simulation";
+            span.innerText = hasSave ? "Continue" : "Initialize Simulation";
             startBtn.appendChild(span);
             
+            if (hasSave) {
+                const newGameBtn = document.createElement('button');
+                const nSpan = document.createElement('span');
+                nSpan.innerText = "New Game";
+                newGameBtn.appendChild(nSpan);
+                newGameBtn.addEventListener('click', () => {
+                    localStorage.removeItem('understory_save');
+                    gameState.currentNode = 'start';
+                    gameState.flags = { examinedMicroscope: false, examinedNectar: false, mothHelped: false, flytrapHealed: false, beetleMet: false, satDown: false, lookedAround: false };
+                    gameState.memories = [];
+                    memoryList.innerHTML = '';
+                    sidebar.classList.remove('visible');
+                    AudioEngine.init();
+                    renderNode('start');
+                });
+                choicesContainer.appendChild(newGameBtn);
+            }
+
             startBtn.addEventListener('click', () => {
+                gameState.currentNode = hasSave ? (gameState.currentNode || 'start') : 'start';
                 AudioEngine.init();
-                renderNode('start');
+                renderNode(gameState.currentNode);
             });
-            
+
             choicesContainer.appendChild(startBtn);
-            
             setTimeout(() => {
                 choicesContainer.classList.add('visible');
             }, 1000);
         };
-
     </script>
 </body>
 </html>
