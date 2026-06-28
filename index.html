@@ -437,7 +437,7 @@
                 const scale = [261.63, 311.13, 392.00, 466.16, 523.25]; // C minor pentatonic
                 
                 function playRandomChime() {
-                    if (Math.random() > 0.8) {
+                    if (Math.random() > 0.4) {
                         const osc = ctx.createOscillator();
                         const gain = ctx.createGain();
                         
@@ -445,7 +445,7 @@
                         osc.frequency.value = scale[Math.floor(Math.random() * scale.length)];
                         
                         gain.gain.setValueAtTime(0, ctx.currentTime);
-                        gain.gain.linearRampToValueAtTime(0.015, ctx.currentTime + 0.5);
+                        gain.gain.linearRampToValueAtTime(0.10, ctx.currentTime + 0.5);
                         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 8);
                         
                         osc.connect(gain);
