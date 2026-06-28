@@ -5,18 +5,33 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Understory</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400&display=swap');
+        /* =========================================
+           1. TYPOGRAPHY & VARIABLES
+           ========================================= */
+        @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Inter:wght@300;400;500&display=swap');
 
         :root {
-            --bg-dark: #030a06;
+            --bg-dark: #010402;
             --text-main: #e8f4ec;
-            --text-muted: #8ca394;
-            --accent: #a3d9b4;
+            --text-muted: #6b8274;
+            --accent: #8fbfaa;
+            --accent-glow: rgba(143, 191, 170, 0.4);
+            --ui-border: rgba(116, 140, 126, 0.15);
+            --ui-bg-hover: rgba(143, 191, 170, 0.05);
+            --transition-slow: 2s cubic-bezier(0.25, 1, 0.5, 1);
+            --transition-med: 0.8s ease;
+        }
+
+        /* =========================================
+           2. BASE STYLES & RESET
+           ========================================= */
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body, html {
-            margin: 0;
-            padding: 0;
             width: 100%;
             height: 100%;
             background-color: var(--bg-dark);
@@ -26,26 +41,40 @@
             display: flex;
             justify-content: center;
             align-items: center;
+            user-select: none; /* Prevents text selection for a game feel */
         }
 
-        /* Organic film grain overlay */
+        /* =========================================
+           3. BACKGROUND & ATMOSPHERE
+           ========================================= */
         .noise {
             position: fixed;
             top: 0; left: 0; width: 100vw; height: 100vh;
             pointer-events: none;
             z-index: 50;
             opacity: 0.04;
-            background: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+            background: url('data:image/svg+xml;utf8,%3Csvg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"%3E%3Cfilter id="noiseFilter"%3E%3CfeTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/%3E%3C/filter%3E%3Crect width="100%25" height="100%25" filter="url(%23noiseFilter)"/%3E%3C/svg%3E');
+        }
+
+        .vignette {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            pointer-events: none;
+            z-index: 40;
+            background: radial-gradient(circle at center, transparent 40%, rgba(1, 4, 2, 0.9) 100%);
         }
 
         #bg-glow {
             position: absolute;
             top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle at 50% 110%, rgba(18, 54, 34, 0.6) 0%, rgba(3, 10, 6, 1) 80%);
+            background: radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%);
             z-index: 0;
-            transition: background 0.3s ease;
+            transition: background 3s ease; /* Slow transition for scene changes */
         }
 
+        /* =========================================
+           4. PARTICLE ENGINE (SPORES)
+           ========================================= */
         #spores-container {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -54,103 +83,244 @@
 
         .spore {
             position: absolute;
-            background: rgba(163, 217, 180, 0.4);
+            background: var(--accent);
             border-radius: 50%;
-            filter: blur(2px);
-            animation: float-up linear infinite, pulse ease-in-out infinite alternate;
+            filter: blur(4px);
+            opacity: 0;
+            transition: background 2s ease;
         }
 
+        /* Spores injected via JS will have dynamic animations */
         @keyframes float-up {
-            0% { transform: translateY(110vh) translateX(0); opacity: 0; }
-            20% { opacity: 0.8; }
-            80% { opacity: 0.8; }
-            100% { transform: translateY(-10vh) translateX(40px); opacity: 0; }
+            0% { transform: translateY(110vh) translateX(0) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.5; }
+            90% { opacity: 0.5; }
+            100% { transform: translateY(-10vh) translateX(50px) rotate(360deg); opacity: 0; }
         }
 
-        @keyframes pulse {
-            0% { transform: scale(0.8); }
-            100% { transform: scale(1.4); }
+        @keyframes float-pulse {
+            0% { transform: scale(0.8); opacity: 0.3; }
+            100% { transform: scale(1.4); opacity: 0.7; }
+        }
+
+        /* =========================================
+           5. LAYOUT & CONTAINERS
+           ========================================= */
+        #main-layout {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            max-width: 1000px;
+            height: 85vh;
+            padding: 0 40px;
+            gap: 60px;
         }
 
         #reader-pane {
+            flex: 2;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             position: relative;
-            z-index: 10;
-            max-width: 600px;
-            width: 85%;
-            padding: 40px;
+            max-width: 650px;
         }
 
+        #sidebar {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding-bottom: 10vh;
+            opacity: 0;
+            transition: opacity var(--transition-med);
+        }
+
+        #sidebar.visible {
+            opacity: 1;
+        }
+
+        /* =========================================
+           6. TYPOGRAPHY & TEXT ELEMENTS
+           ========================================= */
         #audio-prompt {
+            position: absolute;
+            top: 5vh;
+            width: 100%;
             text-align: center;
             font-family: 'Inter', sans-serif;
             font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 50px;
-            letter-spacing: 0.2em;
+            letter-spacing: 0.3em;
             text-transform: uppercase;
             animation: breathe 4s infinite alternate;
+            z-index: 20;
         }
 
         @keyframes breathe {
-            0% { opacity: 0.4; }
-            100% { opacity: 1; }
+            0% { opacity: 0.2; }
+            100% { opacity: 0.6; }
         }
 
-        #text-container {
-            font-size: 1.5rem;
-            line-height: 1.6;
-            margin-bottom: 50px;
-            min-height: 180px;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        #scene-title {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.8rem;
+            color: var(--accent);
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 25px;
             opacity: 0;
             transform: translateY(10px);
             transition: opacity 1.5s ease, transform 1.5s ease;
         }
 
-        #text-container.visible {
-            opacity: 1;
+        #scene-title.visible {
+            opacity: 0.7;
             transform: translateY(0);
         }
 
-        #choices-container {
+        #text-container {
+            font-size: 1.6rem;
+            line-height: 1.7;
+            margin-bottom: 60px;
+            min-height: 250px;
+            text-shadow: 0 4px 20px rgba(0,0,0,0.9);
             display: flex;
             flex-direction: column;
-            gap: 12px;
+            gap: 20px;
+        }
+
+        .story-paragraph {
             opacity: 0;
-            transition: opacity 1s ease;
+            transform: translateY(10px);
+            transition: opacity 2s ease, transform 2s ease;
         }
 
-        #choices-container.visible {
+        .story-paragraph.visible {
             opacity: 1;
-        }
-
-        button {
-            background: transparent;
-            color: var(--text-muted);
-            border: 1px solid rgba(140, 163, 148, 0.2);
-            padding: 14px 20px;
-            font-family: 'Inter', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 300;
-            letter-spacing: 0.05em;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-align: left;
-            position: relative;
-            overflow: hidden;
-        }
-
-        button:hover {
-            color: var(--text-main);
-            border-color: var(--accent);
-            background: rgba(163, 217, 180, 0.05);
-            transform: translateX(5px);
+            transform: translateY(0);
         }
 
         em {
             color: var(--accent);
             font-style: italic;
+            opacity: 0.95;
+        }
+
+        .inner-thought {
+            font-size: 1.3rem;
+            color: var(--text-muted);
+            font-style: italic;
+            padding-left: 20px;
+            border-left: 2px solid var(--ui-border);
+        }
+
+        /* =========================================
+           7. INTERACTIVE UI (BUTTONS)
+           ========================================= */
+        #choices-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            opacity: 0;
+            transition: opacity 1.5s ease;
+            pointer-events: none; /* Disabled until faded in */
+        }
+
+        #choices-container.visible {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        button {
+            background: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--ui-border);
+            padding: 18px 24px;
+            font-family: 'Inter', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 300;
+            letter-spacing: 0.05em;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 0%; height: 100%;
+            background: var(--ui-bg-hover);
+            transition: width 0.4s ease;
+            z-index: 0;
+        }
+
+        button:hover::before {
+            width: 100%;
+        }
+
+        button:hover {
+            color: var(--text-main);
+            border-color: var(--accent);
+            transform: translateX(8px);
+            box-shadow: 0 4px 20px rgba(143, 191, 170, 0.1);
+        }
+
+        button span {
+            position: relative;
+            z-index: 1;
+        }
+
+        .btn-examine {
+            border-style: dashed;
+        }
+
+        /* =========================================
+           8. INVENTORY / MEMORY SYSTEM
+           ========================================= */
+        .sidebar-title {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--ui-border);
+            padding-bottom: 10px;
+        }
+
+        #memory-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            list-style: none;
+        }
+
+        .memory-item {
+            font-size: 1.1rem;
+            color: var(--accent);
+            opacity: 0;
+            transform: translateX(-10px);
+            transition: opacity 1s ease, transform 1s ease;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .memory-item.visible {
+            opacity: 0.8;
+            transform: translateX(0);
+        }
+
+        .memory-item::before {
+            content: '✦';
+            font-size: 0.8rem;
+            color: var(--text-muted);
         }
 
     </style>
@@ -158,267 +328,664 @@
 <body>
 
     <div class="noise"></div>
+    <div class="vignette"></div>
     <div id="bg-glow"></div>
     <div id="spores-container"></div>
+    
+    <div id="audio-prompt">Audio required. Take your time.</div>
 
-    <div id="reader-pane">
-        <div id="audio-prompt">Put your headphones on.</div>
-        <div id="text-container"></div>
-        <div id="choices-container"></div>
+    <div id="main-layout">
+        <div id="reader-pane">
+            <div id="scene-title"></div>
+            <div id="text-container"></div>
+            <div id="choices-container"></div>
+        </div>
+
+        <div id="sidebar">
+            <div class="sidebar-title">Field Notes</div>
+            <ul id="memory-list"></ul>
+        </div>
     </div>
 
     <script>
-        // --- AMBIENT SOUNDSCAPE ENGINE ---
-        // Generates an evolving, algorithmic ambient track in the browser
-        let audioCtx;
-        function initAudio() {
-            if (audioCtx) return;
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            audioCtx = new AudioContext();
+        /* =========================================
+           1. ADVANCED AUDIO ENGINE (Web Audio API)
+           ========================================= */
+        const AudioEngine = (function() {
+            let ctx = null;
+            let masterGain = null;
+            let ambientOscillators = [];
+            let noiseSource = null;
 
-            const masterGain = audioCtx.createGain();
-            masterGain.gain.value = 0;
-            masterGain.connect(audioCtx.destination);
-            masterGain.gain.setTargetAtTime(0.4, audioCtx.currentTime, 5);
+            function init() {
+                if (ctx) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                ctx = new AudioContext();
+                
+                masterGain = ctx.createGain();
+                masterGain.connect(ctx.destination);
+                masterGain.gain.value = 0;
+                
+                // Fade in master volume slowly
+                masterGain.gain.setTargetAtTime(0.8, ctx.currentTime, 5);
 
-            // 1. Gentle Wind/Breathing (Filtered Noise)
-            const bufferSize = audioCtx.sampleRate * 2;
-            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-            const data = buffer.getChannelData(0);
-            for (let i = 0; i < bufferSize; i++) {
-                data[i] = Math.random() * 2 - 1;
+                startAmbientHum();
+                startChimes();
             }
-            const noise = audioCtx.createBufferSource();
-            noise.buffer = buffer;
-            noise.loop = true;
 
-            const noiseFilter = audioCtx.createBiquadFilter();
-            noiseFilter.type = 'lowpass';
-            noiseFilter.frequency.value = 400;
-
-            const noiseLFO = audioCtx.createOscillator();
-            noiseLFO.frequency.value = 0.05; // Very slow breathing
-            const noiseLFOGain = audioCtx.createGain();
-            noiseLFOGain.gain.value = 200;
-            noiseLFO.connect(noiseLFOGain);
-            noiseLFOGain.connect(noiseFilter.frequency);
-
-            const noiseVolume = audioCtx.createGain();
-            noiseVolume.gain.value = 0.05;
-
-            noise.connect(noiseFilter);
-            noiseFilter.connect(noiseVolume);
-            noiseVolume.connect(masterGain);
-            noise.start();
-            noiseLFO.start();
-
-            // 2. Swelling Background Chords
-            const createDrone = (freq, rate) => {
-                const osc = audioCtx.createOscillator();
-                osc.type = 'sine';
-                osc.frequency.value = freq;
+            function startAmbientHum() {
+                // 1. Ultra-soft, low-pass filtered brown noise (Breath of the cavern)
+                const bufferSize = ctx.sampleRate * 2;
+                const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                const data = buffer.getChannelData(0);
+                let lastOut = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    data[i] = (lastOut + (0.02 * white)) / 1.02; // Brown noise approximation
+                    lastOut = data[i];
+                    data[i] *= 3.5; // Compensate gain
+                }
                 
-                const lfo = audioCtx.createOscillator();
-                lfo.type = 'sine';
-                lfo.frequency.value = rate;
-                
-                const gain = audioCtx.createGain();
-                gain.gain.value = 0;
-                
-                lfo.connect(gain.gain);
-                osc.connect(gain);
-                gain.connect(masterGain);
-                
-                osc.start();
-                lfo.start();
-            };
-            createDrone(130.81, 0.03); // C3
-            createDrone(196.00, 0.04); // G3
-            createDrone(220.00, 0.02); // A3
+                noiseSource = ctx.createBufferSource();
+                noiseSource.buffer = buffer;
+                noiseSource.loop = true;
 
-            // 3. Generative Pentatonic Chimes
-            const scale = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25]; // C4, D4, E4, G4, A4, C5
-            
-            function playChime() {
-                if (Math.random() > 0.6) {
-                    const osc = audioCtx.createOscillator();
-                    const gain = audioCtx.createGain();
+                const filter = ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.value = 180; // Very muffled
+
+                const noiseVolume = ctx.createGain();
+                noiseVolume.gain.value = 0.015; // Extremely quiet background presence
+
+                noiseSource.connect(filter);
+                filter.connect(noiseVolume);
+                noiseVolume.connect(masterGain);
+                noiseSource.start();
+
+                // 2. Deep, evolving pads (Sine waves with slow LFOs)
+                const createDrone = (freq, lfoRate, vol) => {
+                    const osc = ctx.createOscillator();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
                     
-                    osc.type = 'triangle';
-                    // Pick a random note from the scale
-                    osc.frequency.value = scale[Math.floor(Math.random() * scale.length)];
+                    const lfo = ctx.createOscillator();
+                    lfo.type = 'sine';
+                    lfo.frequency.value = lfoRate;
                     
-                    // Pluck envelope
-                    gain.gain.setValueAtTime(0, audioCtx.currentTime);
-                    gain.gain.linearRampToValueAtTime(0.08, audioCtx.currentTime + 0.1);
-                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 4);
+                    const gain = ctx.createGain();
                     
+                    const maxGain = ctx.createGain();
+                    maxGain.gain.value = vol;
+
+                    lfo.connect(gain.gain);
                     osc.connect(gain);
-                    gain.connect(masterGain);
+                    gain.connect(maxGain);
+                    maxGain.connect(masterGain);
                     
                     osc.start();
-                    osc.stop(audioCtx.currentTime + 4);
-                }
-                // Schedule next chime randomly between 1 and 4 seconds
-                setTimeout(playChime, 1000 + Math.random() * 3000);
-            }
-            playChime();
-        }
+                    lfo.start();
+                    ambientOscillators.push({ osc, lfo, maxGain, baseVol: vol });
+                };
 
-        // --- VISUAL SPORES ---
-        function createSpores() {
+                // C Minor / Eb Major feel
+                createDrone(98.00, 0.015, 0.08);  // G2
+                createDrone(130.81, 0.02, 0.06);  // C3
+                createDrone(155.56, 0.01, 0.04);  // Eb3
+            }
+
+            function startChimes() {
+                const scale = [261.63, 311.13, 392.00, 466.16, 523.25]; // C minor pentatonic
+                
+                function playRandomChime() {
+                    if (Math.random() > 0.8) {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        
+                        osc.type = 'sine';
+                        osc.frequency.value = scale[Math.floor(Math.random() * scale.length)];
+                        
+                        gain.gain.setValueAtTime(0, ctx.currentTime);
+                        gain.gain.linearRampToValueAtTime(0.015, ctx.currentTime + 0.5);
+                        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 8);
+                        
+                        osc.connect(gain);
+                        gain.connect(masterGain);
+                        
+                        osc.start();
+                        osc.stop(ctx.currentTime + 8);
+                    }
+                    setTimeout(playRandomChime, 3000 + Math.random() * 5000);
+                }
+                playRandomChime();
+            }
+
+            // Interactive Sounds
+            function playHoverSound() {
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, ctx.currentTime + 0.1);
+                
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.02, ctx.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+                
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.1);
+            }
+
+            function playClickSound() {
+                if (!ctx) return;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(150, ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.2);
+                
+                gain.gain.setValueAtTime(0, ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.05, ctx.currentTime + 0.01);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+                
+                osc.connect(gain);
+                gain.connect(masterGain);
+                osc.start();
+                osc.stop(ctx.currentTime + 0.2);
+            }
+
+            function shiftMood(mood) {
+                if (!ctx) return;
+                // Shift ambient frequencies slightly based on narrative location
+                const targets = mood === 'dark' ? [92.50, 123.47, 146.83] : // F# minor feel
+                                mood === 'light' ? [130.81, 164.81, 196.00] : // C major feel
+                                [98.00, 130.81, 155.56]; // Default C minor
+                
+                ambientOscillators.forEach((oscObj, index) => {
+                    if (targets[index]) {
+                        oscObj.osc.frequency.setTargetAtTime(targets[index], ctx.currentTime, 3);
+                    }
+                });
+            }
+
+            return { init, playHoverSound, playClickSound, shiftMood };
+        })();
+
+        /* =========================================
+           2. VISUAL ENGINE (Spores & Background)
+           ========================================= */
+        function initVisuals() {
             const container = document.getElementById('spores-container');
-            for (let i = 0; i < 35; i++) {
+            for (let i = 0; i < 40; i++) {
                 const spore = document.createElement('div');
                 spore.classList.add('spore');
                 const size = Math.random() * 2.5 + 1;
                 spore.style.width = `${size}px`;
                 spore.style.height = `${size}px`;
                 spore.style.left = `${Math.random() * 100}vw`;
-                spore.style.animationDuration = `${Math.random() * 25 + 15}s, ${Math.random() * 3 + 2}s`;
-                spore.style.animationDelay = `${Math.random() * -30}s, 0s`;
+                
+                // Randomize animations
+                const floatDur = Math.random() * 35 + 25;
+                const pulseDur = Math.random() * 4 + 3;
+                const delay = Math.random() * -50;
+                
+                spore.style.animation = `float-up ${floatDur}s linear infinite ${delay}s, float-pulse ${pulseDur}s ease-in-out infinite alternate ${delay}s`;
                 container.appendChild(spore);
             }
+
+            // Mouse tracking for subtle parallax gradient
+            document.addEventListener('mousemove', (e) => {
+                const x = (e.clientX / window.innerWidth) * 100;
+                const y = (e.clientY / window.innerHeight) * 100;
+                const bg = document.getElementById('bg-glow');
+                // The base colors are controlled by CSS variables updated in state, we just move the radial center
+                bg.style.backgroundPosition = `${x}% ${y}%`;
+            });
         }
-        createSpores();
 
-        // --- STORY ENGINE ---
-        let state = { helpedMoth: false, healedFlytrap: false, metBeetle: false };
+        /* =========================================
+           3. GAME STATE & NARRATIVE DATA
+           ========================================= */
+        const gameState = {
+            memories: [],
+            flags: {
+                examinedMicroscope: false,
+                examinedNectar: false,
+                mothHelped: false,
+                flytrapHealed: false,
+                beetleMet: false,
+                realizedScale: false
+            }
+        };
 
-        const story = {
+        const storyNodes = {
             start: {
-                text: "You’ve been at the desk for eleven hours. It’s a habit. The speeding minor last month was supposed to be a sign to slow down, but here you are, engineering a lab setup that would make Kevin McCloud from <em>Grand Designs</em> weep. Your copy of <em>The Atlas Six</em> is buried under notes. You lean over the primary sample. You slip. The floor vanishes.",
+                title: "Local Time: 02:14 AM",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 30, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "You are eleven hours deep into a localized ecosystem analysis.",
+                    "You’ve always had a problem with moving too fast—a flaw the DVLA recently formalized—but right now, the microscopic world demands total, agonizing patience.",
+                    "Your workspace is absurdly over-engineered. There is enough scaffolding holding up your lights to support a small architectural digest project. Beneath a stack of scattered notes, the spine of a fantasy novel peeks out next to a Victorian botanical journal."
+                ],
+                choices: [
+                    { 
+                        text: "Examine the slide.", 
+                        target: "microscope",
+                        type: "examine",
+                        condition: () => !gameState.flags.examinedMicroscope 
+                    },
+                    { 
+                        text: "Lean over the primary sample.", 
+                        target: "the_fall" 
+                    }
+                ]
+            },
+            microscope: {
+                title: "The Lens",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 30, 25, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "You adjust the coarse focus. The cellular walls come into sharp relief. There is an entire, frantic universe happening down there, completely oblivious to the giant watching them.",
+                    "<span class='inner-thought'>It must be nice, having walls that thick.</span>"
+                ],
+                choices: [
+                    { 
+                        text: "Step back from the eyepiece.", 
+                        target: "start",
+                        action: () => gameState.flags.examinedMicroscope = true
+                    }
+                ]
+            },
+            the_fall: {
+                title: "Terminal Velocity",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(5, 15, 20, 0.6) 0%, rgba(1, 4, 2, 1) 100%)",
+                mood: "dark",
+                content: [
+                    "You reach across the bench for the pipette.",
+                    "You misjudge the distance. A sleeve catches an edge. You slip.",
+                    "The floor doesn't just rush up to meet you; the geometry of the room fractures. The air grows thick. The desk lamps warp into distant, burning suns. You are falling, but it feels like you are shrinking into the space between the atoms."
+                ],
                 choices: [
                     { text: "Brace for impact.", target: "adrift" }
                 ]
             },
             adrift: {
-                text: "When you open your eyes, you are exactly four millimetres tall. You are floating on a piece of fibrous debris in a massive puddle of nectar. It’s very <em>Life of Pi</em>, except the imminent threat isn't a tiger, it's being digested by a pitcher plant.",
+                title: "The Nectar Sea",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(30, 20, 10, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "When you open your eyes, you are exactly four millimetres tall.",
+                    "You are floating on a piece of fibrous debris in a massive, glowing puddle of amber fluid. It’s a bit like being trapped on a lifeboat with a tiger, except the tiger is the boat, and it is slowly, enzymatically trying to digest you."
+                ],
                 choices: [
-                    { text: "Paddle to the solid edge.", target: "edge" }
+                    { 
+                        text: "Examine the fluid.", 
+                        target: "examine_nectar",
+                        type: "examine",
+                        condition: () => !gameState.flags.examinedNectar 
+                    },
+                    { text: "Paddle toward the solid edge.", target: "shore" }
                 ]
             },
-            edge: {
-                text: "You pull yourself onto the waxy green rim. Bioluminescent spores drift through the air like snow. The towering silhouettes of carnivorous plants loom above you. From where you stand, you can hear a frantic fluttering to your left. Straight ahead, the path is blocked by wilted leaves. To your right, there is a rhythmic, stubborn tapping.",
+            examine_nectar: {
+                title: "Digestive Fluids",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(40, 25, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "dark",
+                content: [
+                    "It’s highly viscous. A complex cocktail of acid phosphatases and proteases. You recognize the chemical signature immediately. It’s a pitcher plant.",
+                    "<span class='inner-thought'>At least it's an academically interesting way to die.</span>"
+                ],
                 choices: [
-                    { text: "Walk toward the fluttering sound.", target: "moth", condition: () => !state.helpedMoth },
-                    { text: "Look at the blocked path.", target: "flytrap", condition: () => !state.healedFlytrap },
-                    { text: "See who's tapping.", target: "beetle", condition: () => !state.metBeetle },
-                    { text: "Look up at the sheer drop of the stool leg.", target: "climax", condition: () => state.helpedMoth || state.healedFlytrap || state.metBeetle }
+                    { 
+                        text: "Focus on surviving instead.", 
+                        target: "adrift",
+                        action: () => gameState.flags.examinedNectar = true
+                    }
                 ]
             },
-            moth: {
-                text: "It’s a moth. A very pathetic-looking moth with a badly torn wing. It's grounded. This isn't exactly your usual field, but you’ve been reading up on prosthetics lately. You might as well.",
+            shore: {
+                title: "The Understory",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "You pull yourself onto the waxy green rim, boots slipping slightly on the cuticle layer. The air here smells wildly of ozone and crushed leaves.",
+                    "Bioluminescent spores drift through the cavernous space like snow. The towering silhouettes of carnivorous plants loom above you, casting long, alien shadows against the distant, artificial sky of your desk lamp.",
+                    "It is terrifying. It is undeniably beautiful."
+                ],
                 choices: [
-                    { text: "Splint the wing with dried fibers.", target: "moth_help" }
+                    { text: "Venture into the undergrowth.", target: "crossroads", action: () => showSidebar() }
                 ]
             },
-            moth_help: {
-                text: "You piece together a delicate, highly functional brace. The moth flexes it, hovers, and gives you a look of deep, insectoid gratitude. It nudges something toward your boots. It’s a Percy Pig. Where did a moth get a Percy Pig? Don't ask.",
+            crossroads: {
+                title: "The Junction",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "The path splinters into three directions through the towering stems.",
+                    "From the left, you hear a frantic, uneven fluttering. Straight ahead, the main thoroughfare is blocked by a massive cluster of wilted leaves. To your right, there is a rhythmic, stubborn tapping.",
+                    "Far above, the metallic rim of the stool leg stretches into the heavens. The only way out."
+                ],
                 choices: [
-                    { text: "Pocket the gummy and head back.", target: "edge", action: () => state.helpedMoth = true }
+                    { text: "Follow the fluttering sound.", target: "moth_approach", condition: () => !gameState.flags.mothHelped },
+                    { text: "Inspect the central blockage.", target: "flytrap_approach", condition: () => !gameState.flags.flytrapHealed },
+                    { text: "Find the source of the tapping.", target: "beetle_approach", condition: () => !gameState.flags.beetleMet },
+                    { text: "Approach the base of the stool leg.", target: "climax_base", condition: () => gameState.flags.mothHelped || gameState.flags.flytrapHealed || gameState.flags.beetleMet }
                 ]
             },
-            flytrap: {
-                text: "The path is blocked by a Venus flytrap that looks terrible. The tissue around its hinges is swollen and discolored. It's a textbook bacterial bloom. You sigh, slipping effortlessly into microbiology mode.",
+            moth_approach: {
+                title: "Fallen Aviator",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "You push through the dew-heavy ferns and find a lunar moth.",
+                    "It is a magnificent, pale-green creature, but it is grounded. Its left wing is badly torn along the primary vein, dragging in the dirt.",
+                    "This isn't exactly your jurisdiction, but you’ve always had a fascination with how broken things can be engineered to work again."
+                ],
                 choices: [
-                    { text: "Neutralize the infection.", target: "flytrap_help" }
+                    { text: "Assess the structural damage.", target: "moth_craft", type: "examine" }
                 ]
             },
-            flytrap_help: {
-                text: "You synthesize a quick alkaline drop from some nearby moss and apply it to the hinges. The flytrap shudders, the swelling recedes, and the massive jaws slowly open, clearing the central path.",
+            moth_craft: {
+                title: "Field Prosthetics",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "You need something lightweight but high-tension. You strip a micro-fiber from a nearby dried root system and isolate a drop of plant resin.",
+                    "Working with pharmaceutical-grade precision, you piece together a delicate, highly functional brace along the tear.",
+                    "The moth flexes it. The geometry holds."
+                ],
                 choices: [
-                    { text: "Give the leaf a pat and head back.", target: "edge", action: () => state.healedFlytrap = true }
+                    { text: "Step back and let it test the wing.", target: "moth_reward" }
                 ]
             },
-            beetle: {
-                text: "There is a rhinoceros beetle sitting on a pebble. It is wearing a tiny, makeshift cape made of red and white fabric. You squint. It's definitely a scrap of an Arsenal scarf. The beetle isn't doing anything, just sitting there, radiating pure Lego Batman energy.",
+            moth_reward: {
+                title: "An Offering",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 35, 45, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "The moth tests the aerodynamics. It hovers, lifting effortlessly into the heavy air. Before it leaves, it lands briefly by your boots, nudging a soft, powdery pink object toward you.",
+                    "It’s a gummy. It smells distinctly of British supermarkets. Where a moth acquired this is a mystery you choose not to investigate.",
+                    "<span class='inner-thought'>You put the Percy Pig in your pocket.</span>"
+                ],
                 choices: [
-                    { text: "Nod respectfully.", target: "beetle_help" }
+                    { 
+                        text: "Return to the junction.", 
+                        target: "crossroads", 
+                        action: () => {
+                            gameState.flags.mothHelped = true;
+                            addMemory("A prosthetic wing, engineered in the dark.");
+                        }
+                    }
                 ]
             },
-            beetle_help: {
-                text: "The beetle nods back. An unspoken, deeply serious bond of respect has been formed. He stands guard. He is ready.",
+            flytrap_approach: {
+                title: "Cellular Breakdown",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(45, 10, 15, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "dark",
+                content: [
+                    "The central path is completely walled off by a colossal Venus flytrap. It looks terrible.",
+                    "The hinges of its jaw are swollen, locked shut, and deeply discolored. The tissue is weeping a milky fluid. It's a textbook bacterial bloom.",
+                    "You don't even have to think about it. Cellular breakdown is practically your second language."
+                ],
                 choices: [
-                    { text: "Leave him to his watch.", target: "edge", action: () => state.metBeetle = true }
+                    { text: "Swab the hinge and diagnose.", target: "flytrap_diagnose", type: "examine" }
                 ]
             },
-            climax: {
-                text: "You get to the base of the metal stool leg. It stretches up into the darkness like a skyscraper. The polished steel is too sheer to climb. You run the physics in your head. It’s impossible. The heavy quiet of the lab settles over you.",
+            flytrap_diagnose: {
+                title: "Microbiology",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(45, 10, 15, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "dark",
+                content: [
+                    "Highly acidic. The localized environment is preventing the plant's natural immune response.",
+                    "You need a base to neutralize the bloom. You scour the perimeter, finding a patch of limestone-rich moss. You synthesize a quick, concentrated alkaline drop using the dew on a spider web."
+                ],
                 choices: [
-                    { text: "Try to find another way around.", target: "climax_resolve" }
+                    { text: "Apply the drop directly to the infection.", target: "flytrap_cure" }
                 ]
             },
-            climax_resolve: {
-                text: "Before you can turn around, there's a shift in the air. A shadow drops down—it's the moth, hovering steadily on its new wing. The beetle marches out of the undergrowth to brace your boots. From above, the healed flytrap lowers a thick, sturdy vine. You spend so much of your life making sure everyone else doesn't fall apart. It's nice, just this once, to let them carry you.",
+            flytrap_cure: {
+                title: "Clearance",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(13, 41, 25, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "The reaction is instantaneous. The acid neutralizes with a soft hiss.",
+                    "The flytrap shudders violently. The swelling in the hinge recedes before your eyes. With a heavy, groaning creak, the massive spiked jaws slowly open, revealing the path forward."
+                ],
                 choices: [
-                    { text: "Hold on.", target: "ending" }
+                    { 
+                        text: "Give the giant leaf a gentle pat and step back.", 
+                        target: "crossroads",
+                        action: () => {
+                            gameState.flags.flytrapHealed = true;
+                            addMemory("A bacterial bloom, neutralized.");
+                        }
+                    }
+                ]
+            },
+            beetle_approach: {
+                title: "The Sentinel",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "Following the tapping sound, you find a rhinoceros beetle sitting entirely alone on a smooth pebble.",
+                    "It has draped a torn scrap of red-and-white fabric over its shell like a cape. It is staring out into the dark undergrowth with the brooding, theatrical intensity of a plastic vigilante."
+                ],
+                choices: [
+                    { text: "Approach slowly.", target: "beetle_standoff" }
+                ]
+            },
+            beetle_standoff: {
+                title: "Silent Watch",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "It doesn't move as you approach. It just keeps staring into the abyss.",
+                    "There is no puzzle here. No biological imperative to fix. Sometimes, things just need someone to stand next to them in the dark for a minute.",
+                    "You step up onto the pebble and stand beside him, looking out at the same empty patch of leaves."
+                ],
+                choices: [
+                    { text: "Nod respectfully at the cape.", target: "beetle_bond" }
+                ]
+            },
+            beetle_bond: {
+                title: "The Bond",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(35, 15, 10, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "The beetle turns its massive horned head and nods back.",
+                    "An unspoken, deeply serious bond of respect has been formed. He stands guard. He is ready."
+                ],
+                choices: [
+                    { 
+                        text: "Leave him to his watch.", 
+                        target: "crossroads",
+                        action: () => {
+                            gameState.flags.beetleMet = true;
+                            addMemory("A vigilante in red and white, acknowledged.");
+                        }
+                    }
+                ]
+            },
+            climax_base: {
+                title: "The Ascent",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(10, 20, 30, 0.5) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "dark",
+                content: [
+                    "You reach the center of the clearing. The leg of the metal stool stretches up into the darkness like a polished steel skyscraper.",
+                    "You run the physics in your head. The friction coefficient of the metal. Your current mass. The sheer vertical drop.",
+                    "It’s physically impossible to climb alone."
+                ],
+                choices: [
+                    { text: "Stand at the base of the metal.", target: "climax_despair" }
+                ]
+            },
+            climax_despair: {
+                title: "Calculations",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(5, 10, 15, 0.6) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "dark",
+                content: [
+                    "You stand there for a moment. The heavy, isolated quiet of the lab settles over you, magnified a thousand times by your size.",
+                    "You spend so much of your life quietly holding the world together for everyone else. Calculating the risks. Taking on the weight.",
+                    "You close your eyes. You prepare to figure out another impossible solution on your own."
+                ],
+                choices: [
+                    { text: "Turn around.", target: "climax_rescue" }
+                ]
+            },
+            climax_rescue: {
+                title: "The Lift",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(20, 45, 30, 0.7) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "light",
+                content: [
+                    "The air shifts.",
+                    "The lunar moth descends silently from the canopy, hovering steadily at shoulder height.",
+                    "The rhinoceros beetle marches out of the undergrowth, bracing its massive frame against your boots to give you the initial boost.",
+                    "And from the darkness above, the healed flytrap lowers a thick, sturdy vine, draped perfectly against the steel.",
+                    "<span class='inner-thought'>It is nice, just this once, to let the world hold you together instead.</span>"
+                ],
+                choices: [
+                    { text: "Take hold of the vine.", target: "ending" }
                 ]
             },
             ending: {
-                text: "You are pulled up through the glowing air, past the edge of the desk, back to where you belong.<br><br><br><span style='font-family: Inter, sans-serif; font-size: 0.85rem; color: var(--text-muted); opacity: 0.7; letter-spacing: 0.05em;'>Letterboxd review: 4.5 stars. Great character arcs, but the nectar tasted like battery acid.</span>",
+                title: "Return",
+                bgGradient: "radial-gradient(circle at 50% 110%, rgba(30, 50, 40, 0.4) 0%, rgba(1, 4, 2, 1) 90%)",
+                mood: "default",
+                content: [
+                    "You are pulled up through the glowing air, past the precipice of the desk, back to where you belong.",
+                    "The scale shifts violently again. The world snaps back to standard dimensions. You are sitting in your chair. The desk lamp is just a lamp. The Victorian journal sits quietly.",
+                    "<span class='inner-thought' style='font-size: 0.85rem; letter-spacing: 0.05em; margin-top: 40px; display: block;'>You mentally log the experience: four and a half stars. Beautiful cinematography, incredibly compelling supporting cast, but the nectar tasted like battery acid.</span>"
+                ],
                 choices: []
             }
         };
 
+        /* =========================================
+           4. DOM ELEMENTS & RENDERING ENGINE
+           ========================================= */
         const textContainer = document.getElementById('text-container');
         const choicesContainer = document.getElementById('choices-container');
+        const sceneTitle = document.getElementById('scene-title');
+        const bgGlow = document.getElementById('bg-glow');
         const audioPrompt = document.getElementById('audio-prompt');
+        const sidebar = document.getElementById('sidebar');
+        const memoryList = document.getElementById('memory-list');
 
-        function renderNode(nodeId) {
-            initAudio(); 
-            if(audioPrompt) audioPrompt.style.display = 'none';
-
-            const node = story[nodeId];
+        function addMemory(text) {
+            if (gameState.memories.includes(text)) return;
+            gameState.memories.push(text);
             
-            textContainer.classList.remove('visible');
-            choicesContainer.classList.remove('visible');
-
-            setTimeout(() => {
-                textContainer.innerHTML = node.text;
-                choicesContainer.innerHTML = '';
-
-                node.choices.forEach(choice => {
-                    if (choice.condition && !choice.condition()) return;
-                    
-                    const btn = document.createElement('button');
-                    btn.innerText = choice.text;
-                    btn.onclick = () => {
-                        if (choice.action) choice.action();
-                        renderNode(choice.target);
-                    };
-                    choicesContainer.appendChild(btn);
-                });
-
-                textContainer.classList.add('visible');
-                
-                // Delay the choices slightly so she reads the text first
-                setTimeout(() => {
-                    choicesContainer.classList.add('visible');
-                }, 1200);
-
-            }, 800); 
+            const li = document.createElement('li');
+            li.className = 'memory-item';
+            li.innerText = text;
+            memoryList.appendChild(li);
+            
+            // Trigger reflow and fade in
+            void li.offsetWidth; 
+            li.classList.add('visible');
         }
 
-        // Init
-        textContainer.innerHTML = story.start.text;
-        textContainer.classList.add('visible');
-        
-        const startBtn = document.createElement('button');
-        startBtn.innerText = story.start.choices[0].text;
-        startBtn.onclick = () => renderNode('adrift');
-        choicesContainer.appendChild(startBtn);
-        
-        setTimeout(() => {
-            choicesContainer.classList.add('visible');
-        }, 800);
+        function showSidebar() {
+            if (!sidebar.classList.contains('visible')) {
+                sidebar.classList.add('visible');
+            }
+        }
 
-        // Subtle mouse tracking for the background gradient
-        document.addEventListener('mousemove', (e) => {
-            const x = (e.clientX / window.innerWidth) * 100;
-            const y = (e.clientY / window.innerHeight) * 100;
-            document.getElementById('bg-glow').style.background = `radial-gradient(circle at ${x}% ${y}%, rgba(18, 54, 34, 0.6) 0%, rgba(3, 10, 6, 1) 90%)`;
-        });
+        function renderNode(nodeId) {
+            AudioEngine.init(); 
+            if(audioPrompt) audioPrompt.style.opacity = '0'; // Fade out gently
+
+            const node = storyNodes[nodeId];
+            
+            // 1. Shift Atmosphere
+            bgGlow.style.background = node.bgGradient;
+            AudioEngine.shiftMood(node.mood);
+
+            // 2. Hide current content
+            sceneTitle.classList.remove('visible');
+            choicesContainer.classList.remove('visible');
+            
+            const oldParagraphs = document.querySelectorAll('.story-paragraph');
+            oldParagraphs.forEach(p => p.classList.remove('visible'));
+
+            // 3. Render new content after fade out
+            setTimeout(() => {
+                textContainer.innerHTML = '';
+                choicesContainer.innerHTML = '';
+
+                // Render Title
+                sceneTitle.innerText = node.title;
+                sceneTitle.classList.add('visible');
+
+                // Render Paragraphs sequentially
+                let delay = 300;
+                node.content.forEach((textLine, index) => {
+                    const p = document.createElement('p');
+                    p.className = 'story-paragraph';
+                    p.innerHTML = textLine;
+                    textContainer.appendChild(p);
+                    
+                    setTimeout(() => {
+                        p.classList.add('visible');
+                    }, delay);
+                    
+                    // Calculate delay based on reading length (approx 40ms per char)
+                    const readingTime = textLine.replace(/<[^>]*>?/gm, '').length * 30; 
+                    delay += Math.min(Math.max(readingTime, 800), 2500); 
+                });
+
+                // Render Choices
+                setTimeout(() => {
+                    node.choices.forEach(choice => {
+                        if (choice.condition && !choice.condition()) return;
+                        
+                        const btn = document.createElement('button');
+                        if (choice.type === 'examine') btn.classList.add('btn-examine');
+                        
+                        const span = document.createElement('span');
+                        span.innerText = choice.text;
+                        btn.appendChild(span);
+                        
+                        btn.addEventListener('mouseenter', () => AudioEngine.playHoverSound());
+                        btn.addEventListener('click', () => {
+                            AudioEngine.playClickSound();
+                            if (choice.action) choice.action();
+                            renderNode(choice.target);
+                        });
+                        
+                        choicesContainer.appendChild(btn);
+                    });
+                    
+                    choicesContainer.classList.add('visible');
+                }, delay + 500);
+
+            }, 1000); 
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = () => {
+            initVisuals();
+            
+            // Wait for user interaction to start (solves Audio autoplay issues)
+            const startBtn = document.createElement('button');
+            const span = document.createElement('span');
+            span.innerText = "Initialize Simulation";
+            startBtn.appendChild(span);
+            
+            startBtn.addEventListener('click', () => {
+                AudioEngine.init();
+                renderNode('start');
+            });
+            
+            choicesContainer.appendChild(startBtn);
+            
+            setTimeout(() => {
+                choicesContainer.classList.add('visible');
+            }, 1000);
+        };
 
     </script>
 </body>
